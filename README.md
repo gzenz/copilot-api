@@ -316,7 +316,8 @@ The following command line options are available for the `start` command:
     },
     "useFunctionApplyPatch": true,
     "useMessagesApi": true,
-    "useResponsesApiWebSearch": true
+    "useResponsesApiWebSearch": true,
+    "openaiApiKey": "sk-your-openai-key-for-token-counting"
   }
   ```
 - **auth.apiKeys:** API keys used for request authentication. Supports multiple keys for rotation. Requests can authenticate with either `x-api-key: <key>` or `Authorization: Bearer <key>`. If empty or omitted, authentication is disabled.
@@ -339,6 +340,7 @@ The following command line options are available for the `start` command:
 - **useResponsesApiWebSearch:** When `true`, the server keeps Responses API tools with `type: "web_search"` and forwards them upstream. Set to `false` to strip those tools from `/responses` payloads. Defaults to `true`.
 - **claudeTokenMultiplier:** Multiplier applied to the fallback GPT-tokenizer estimate for Claude `/v1/messages/count_tokens` requests. Defaults to `1.15`. Increase it if your client is still compacting too late. This setting is only used when the proxy is estimating Claude tokens locally; if `anthropicApiKey` is configured and Anthropic token counting succeeds, the exact Anthropic count is returned instead.
 - **anthropicApiKey:** Anthropic API key used for accurate Claude token counting (see [Accurate Claude Token Counting](#accurate-claude-token-counting) below). Can also be set via the `ANTHROPIC_API_KEY` environment variable. If not set, token counting falls back to GPT tokenizer estimation.
+- **openaiApiKey:** OpenAI API key used for accurate GPT-family `/v1/responses/input_tokens` counting. Can also be set via the `OPENAI_API_KEY` environment variable. If not set, token counting falls back to local `gpt-tokenizer` estimation using the model's advertised tokenizer.
 
 Edit this file to customize prompts or swap in your own fast model. Restart the server (or rerun the command) after changes so the cached config is refreshed.
 
@@ -369,6 +371,7 @@ These endpoints mimic the OpenAI API structure.
 | Endpoint                    | Method | Description                                                      |
 | --------------------------- | ------ | ---------------------------------------------------------------- |
 | `POST /v1/responses`        | `POST` | OpenAI Most advanced interface for generating model responses.          |
+| `POST /v1/responses/input_tokens` | `POST` | Calculates Responses API input tokens; forwards GPT-family models to OpenAI's exact endpoint when `openaiApiKey`/`OPENAI_API_KEY` is configured, otherwise estimates locally. |
 | `POST /v1/chat/completions` | `POST` | Creates a model response for the given chat conversation.        |
 | `GET /v1/models`            | `GET`  | Lists the currently available models.                            |
 | `POST /v1/embeddings`       | `POST` | Creates an embedding vector representing the input text.         |

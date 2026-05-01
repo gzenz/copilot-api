@@ -18,6 +18,7 @@ export interface AppConfig {
   useFunctionApplyPatch?: boolean
   useMessagesApi?: boolean
   anthropicApiKey?: string
+  openaiApiKey?: string
   useResponsesApiWebSearch?: boolean
   claudeTokenMultiplier?: number
 }
@@ -218,6 +219,16 @@ export function getExtraPromptForModel(model: string): string {
 export function getSmallModel(): string {
   const config = getConfig()
   return config.smallModel ?? "gpt-5-mini"
+}
+
+export function getOpenAIApiKey(): string | undefined {
+  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY
+  try {
+    return getConfig().openaiApiKey
+  } catch (error) {
+    consola.warn("Failed to read OpenAI API key from config", error)
+    return undefined
+  }
 }
 
 export function getResponsesApiContextManagementModels(): Array<string> {
