@@ -2,6 +2,9 @@
 
 English | [简体中文](./README.zh-CN.md)
 
+> [!NOTE]
+> **Fork scope:** This fork is based on `@jeffreycao/copilot-api` 1.7.1 and is maintained for agent-operability use cases: Claude Code and Codex backed by GitHub Copilot. It intentionally does not track upstream UI additions after the 1.7.1 fork point. Changes here prioritize request compatibility, permission/reviewer behavior, coding-agent tool semantics, and predictable local operation over dashboard or product UI work.
+
 > [!WARNING]
 > This is a reverse-engineered proxy of GitHub Copilot API. It is not supported by GitHub, and may break unexpectedly. Use at your own risk. In the current version, if not using opencode OAuth, the device ID and machine ID will be sent to GitHub Copilot. It is not recommended to use a large number of accounts on a single device; if necessary, it is advised to run them in Docker containers.
 
@@ -46,19 +49,22 @@ English | [简体中文](./README.zh-CN.md)
 
 A reverse-engineered proxy for the GitHub Copilot API that exposes it as an OpenAI and Anthropic compatible service. This allows you to use GitHub Copilot with any tool that supports the OpenAI Chat Completions / Responses API or the Anthropic Messages API, including to power [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview).
 
+This fork's main target clients are Claude Code and Codex. For Codex, it supports the OpenAI Responses API path, model aliasing for Codex's internal auto-review model names, and phase-aware GPT-family responses. For Claude Code, it preserves Anthropic Messages behavior where Copilot exposes it, including tool-use semantics and beta headers.
+
 Compared with routing everything through plain Chat Completions compatibility, this proxy can prefer Copilot's native Anthropic-style Messages API for Claude-family models, preserve more native thinking/tool semantics, reduce unnecessary Premium request consumption on warmup or resumed tool turns, and expose phase-aware `gpt-5.4` / `gpt-5.3-codex` responses that are easier for users to follow.
 
 ## Features
 
 - **OpenAI & Anthropic Compatibility**: Exposes GitHub Copilot as an OpenAI-compatible (`/v1/responses`, `/v1/chat/completions`, `/v1/models`, `/v1/embeddings`) and Anthropic-compatible (`/v1/messages`) API.
 - **Anthropic-First Routing for Claude Models**: When a model supports Copilot's native `/v1/messages` endpoint, the proxy prefers it over `/responses` or `/chat/completions`, preserving Anthropic-style `tool_use` / `tool_result` flows and more Claude-native behavior.
+- **Codex Auto-Review Compatibility**: Maps Codex permission-review model aliases such as `codex-auto-review`, `auto_review`, and `guardian_subagent` to a real Copilot Responses model so auto-permission mode can work through this proxy.
 - **Fewer Unnecessary Premium Requests**: Reduces wasted premium usage by routing warmup requests to `smallModel`, merging `tool_result` follow-ups back into the tool flow, and treating resumed tool turns as continuation traffic instead of fresh premium interactions.
 - **Phase-Aware `gpt-5.4` and `gpt-5.3-codex`**: These models can emit user-friendly commentary before deeper reasoning or tool use, so long-running coding actions are easier to understand instead of appearing as a sudden tool burst.
 - **Claude Native Beta Support**: On the Messages API path, supports Anthropic-native capabilities such as `interleaved-thinking`, `advanced-tool-use`, and `context-management`, which are difficult or unavailable through plain Chat Completions compatibility.
 - **Subagent Marker Integration**: Claude Code and opencode plugins can inject `__SUBAGENT_MARKER__...` and propagate `x-session-id` so subagent traffic keeps the correct root session and agent/user semantics.
 - **OpenCode via `@ai-sdk/anthropic`**: Point OpenCode at this proxy as an Anthropic provider so Anthropic Messages semantics, premium-request optimizations, and Claude-native behavior are preserved end to end.
 - **Claude Code Integration**: Easily configure and launch [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) to use Copilot as its backend with a simple command-line flag (`--claude-code`).
-- **Usage Dashboard**: A web-based dashboard to monitor your Copilot API usage, view quotas, and see detailed statistics.
+- **Usage Viewer**: A minimal local usage viewer remains available, but this fork does not prioritize upstream UI/dashboard additions.
 - **Rate Limit Control**: Manage API usage with rate-limiting options (`--rate-limit`) and a waiting mechanism (`--wait`) to prevent errors from rapid requests.
 - **Manual Request Approval**: Manually approve or deny each API request for fine-grained control over usage (`--manual`).
 - **Token Visibility**: Option to display GitHub and Copilot tokens during authentication and refresh for debugging (`--show-token`).
@@ -133,6 +139,8 @@ When an Anthropic API key is configured, the proxy forwards Claude model token c
 
 ## Installation
 
+For this fork, prefer running from this checkout or installing the checkout globally. Do not use upstream `@latest` if you want the 1.7.1-based Claude Code/Codex operability branch.
+
 To install dependencies, run:
 
 ```sh
@@ -145,9 +153,16 @@ To start the server directly from source:
 bun run start start
 ```
 
+To install this checkout as the `copilot-api` command:
+
+```sh
+npm install -g .
+copilot-api start
+```
+
 ## Using with npx
 
-You can run the project directly using npx:
+The upstream package can be run directly using npx, but this uses upstream releases, not this fork's local branch:
 
 ```sh
 npx @jeffreycao/copilot-api@latest start
@@ -304,15 +319,22 @@ The following command line options are available for the `start` command:
       "gpt-5-mini": "<built-in exploration prompt>",
       "gpt-5.3-codex": "<built-in commentary prompt>",
       "gpt-5.4-mini": "<built-in commentary prompt>",
-      "gpt-5.4": "<built-in commentary prompt>"
+      "gpt-5.4": "<built-in commentary prompt>",
+      "gpt-5.5": "<built-in commentary prompt>"
     },
     "smallModel": "gpt-5-mini",
     "responsesApiContextManagementModels": [],
+    "modelAliases": {
+      "auto_review": "gpt-5-mini",
+      "codex-auto-review": "gpt-5-mini",
+      "guardian_subagent": "gpt-5-mini"
+    },
     "modelReasoningEfforts": {
       "gpt-5-mini": "low",
       "gpt-5.3-codex": "xhigh",
       "gpt-5.4-mini": "xhigh",
-      "gpt-5.4": "xhigh"
+      "gpt-5.4": "xhigh",
+      "gpt-5.5": "xhigh"
     },
     "useFunctionApplyPatch": true,
     "useMessagesApi": true,
@@ -334,6 +356,7 @@ The following command line options are available for the `start` command:
     - `topK` (optional): Default top_k value used when the request does not specify one.
 - **smallModel:** Fallback model used for tool-less warmup messages (e.g., Claude Code probe requests) to avoid spending premium requests; defaults to gpt-5-mini.
 - **responsesApiContextManagementModels:** List of GPT model IDs that should receive Responses API `context_management` compaction instructions. This defaults to `[]`, so you need to opt in explicitly. A good starting point is `["gpt-5-mini", "gpt-5.3-codex", "gpt-5.4-mini", "gpt-5.4"]`. When enabled, the request includes `context_management` in the body and keeps only the latest compaction carrier on follow-up turns. The actual compaction is handled server-side and appears to begin when usage approaches roughly 90% of the model's `maxPromptTokens`, which makes it especially useful for long-running tasks without consuming additional premium requests. In practice, the effective `compact_threshold` also appears to be fixed on the server side, so changing it in this project does not currently alter compaction behavior. At the moment, this optimization is intended for GPT-family models only.
+- **modelAliases:** Map of request model aliases to real Copilot model IDs before `/v1/responses` endpoint validation. This is mainly for Codex auto-permission mode, whose reviewer turns can use internal model names such as `codex-auto-review`, `auto_review`, or `guardian_subagent`. The built-in aliases route those names to `gpt-5-mini` so permission review requests reach a real Copilot Responses model.
 - **modelReasoningEfforts:** Per-model `reasoning.effort` sent to the Copilot Responses API. Allowed values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. If a model isn’t listed, `high` is used by default.
 - **useFunctionApplyPatch:** When `true`, the server will convert any custom tool named `apply_patch` in Responses payloads into an OpenAI-style function tool (`type: "function"`) with a parameter schema so assistants can call it using function-calling semantics to edit files. Set to `false` to leave tools unchanged. Defaults to `true`.
 - **useMessagesApi:** When `true`, Claude-family models that support Copilot's native `/v1/messages` endpoint will use the Messages API; otherwise they fall back to `/chat/completions`. Set to `false` to disable Messages API routing and always use `/chat/completions`. Defaults to `true`.
