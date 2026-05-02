@@ -40,6 +40,26 @@ const createModels = () => ({
       vendor: "OpenAI",
       version: "gpt-5-mini",
     },
+    {
+      capabilities: {
+        family: "gpt-5.2",
+        limits: {
+          max_prompt_tokens: 272000,
+        },
+        object: "model_capabilities" as const,
+        supports: {},
+        tokenizer: "o200k_base",
+        type: "chat" as const,
+      },
+      id: "gpt-5.2",
+      model_picker_enabled: true,
+      name: "GPT-5.2",
+      object: "model" as const,
+      preview: false,
+      supported_endpoints: ["/responses"],
+      vendor: "OpenAI",
+      version: "gpt-5.2",
+    },
   ],
 })
 
@@ -75,9 +95,12 @@ afterEach(() => {
 })
 
 describe("responses handler", () => {
-  test.each(["guardian_subagent", "codex-auto-review"])(
-    "maps Codex approval reviewer model alias %s to a Copilot Responses model",
-    async (modelAlias) => {
+  test.each([
+    ["guardian_subagent", "gpt-5-mini"],
+    ["codex-auto-review", "gpt-5.2"],
+  ])(
+    "maps Codex approval reviewer model alias %s to %s",
+    async (modelAlias, expectedModel) => {
       const fetchMock = mock(
         (_url: string | URL | Request, init?: RequestInit) => {
           const requestBody = typeof init?.body === "string" ? init.body : "{}"
@@ -133,7 +156,7 @@ describe("responses handler", () => {
       const upstreamPayload = JSON.parse(requestBody) as {
         model: string
       }
-      expect(upstreamPayload.model).toBe("gpt-5-mini")
+      expect(upstreamPayload.model).toBe(expectedModel)
     },
   )
 })

@@ -95,7 +95,7 @@ const defaultConfig: AppConfig = {
   responsesApiContextManagementModels: [],
   modelAliases: {
     auto_review: "gpt-5-mini",
-    "codex-auto-review": "gpt-5-mini",
+    "codex-auto-review": "gpt-5.2",
     guardian_subagent: "gpt-5-mini",
   },
   modelReasoningEfforts: {
