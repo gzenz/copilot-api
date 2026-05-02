@@ -11,6 +11,7 @@ export interface AppConfig {
   extraPrompts?: Record<string, string>
   smallModel?: string
   responsesApiContextManagementModels?: Array<string>
+  modelAliases?: Record<string, string>
   modelReasoningEfforts?: Record<
     string,
     "none" | "minimal" | "low" | "medium" | "high" | "xhigh"
@@ -92,6 +93,11 @@ const defaultConfig: AppConfig = {
   },
   smallModel: "gpt-5-mini",
   responsesApiContextManagementModels: [],
+  modelAliases: {
+    auto_review: "gpt-5-mini",
+    "codex-auto-review": "gpt-5-mini",
+    guardian_subagent: "gpt-5-mini",
+  },
   modelReasoningEfforts: {
     "gpt-5-mini": "low",
     "gpt-5.3-codex": "xhigh",
@@ -125,8 +131,8 @@ function ensureConfigFile(): void {
 }
 
 function readConfigFromDisk(): AppConfig {
-  ensureConfigFile()
   try {
+    ensureConfigFile()
     const raw = fs.readFileSync(PATHS.CONFIG_PATH, "utf8")
     if (!raw.trim()) {
       fs.writeFileSync(
@@ -150,7 +156,9 @@ function mergeDefaultConfig(config: AppConfig): {
   const extraPrompts = config.extraPrompts ?? {}
   const defaultExtraPrompts = defaultConfig.extraPrompts ?? {}
   const modelReasoningEfforts = config.modelReasoningEfforts ?? {}
+  const modelAliases = config.modelAliases ?? {}
   const defaultModelReasoningEfforts = defaultConfig.modelReasoningEfforts ?? {}
+  const defaultModelAliases = defaultConfig.modelAliases ?? {}
 
   const missingExtraPromptModels = Object.keys(defaultExtraPrompts).filter(
     (model) => !Object.hasOwn(extraPrompts, model),
@@ -159,11 +167,19 @@ function mergeDefaultConfig(config: AppConfig): {
   const missingReasoningEffortModels = Object.keys(
     defaultModelReasoningEfforts,
   ).filter((model) => !Object.hasOwn(modelReasoningEfforts, model))
+  const missingModelAliasNames = Object.keys(defaultModelAliases).filter(
+    (model) => !Object.hasOwn(modelAliases, model),
+  )
 
   const hasExtraPromptChanges = missingExtraPromptModels.length > 0
   const hasReasoningEffortChanges = missingReasoningEffortModels.length > 0
+  const hasModelAliasChanges = missingModelAliasNames.length > 0
 
-  if (!hasExtraPromptChanges && !hasReasoningEffortChanges) {
+  if (
+    !hasExtraPromptChanges
+    && !hasReasoningEffortChanges
+    && !hasModelAliasChanges
+  ) {
     return { mergedConfig: config, changed: false }
   }
 
@@ -177,6 +193,10 @@ function mergeDefaultConfig(config: AppConfig): {
       modelReasoningEfforts: {
         ...defaultModelReasoningEfforts,
         ...modelReasoningEfforts,
+      },
+      modelAliases: {
+        ...defaultModelAliases,
+        ...modelAliases,
       },
     },
     changed: true,
@@ -232,12 +252,19 @@ export function getOpenAIApiKey(): string | undefined {
 }
 
 export function getResponsesApiContextManagementModels(): Array<string> {
-  const config = getConfig()
-  return (
-    config.responsesApiContextManagementModels
-    ?? defaultConfig.responsesApiContextManagementModels
-    ?? []
-  )
+  try {
+    return (
+      getConfig().responsesApiContextManagementModels
+      ?? defaultConfig.responsesApiContextManagementModels
+      ?? []
+    )
+  } catch (error) {
+    consola.warn(
+      "Failed to read Responses API context management config",
+      error,
+    )
+    return defaultConfig.responsesApiContextManagementModels ?? []
+  }
 }
 
 export function isResponsesApiContextManagementModel(model: string): boolean {
@@ -249,6 +276,20 @@ export function getReasoningEffortForModel(
 ): "none" | "minimal" | "low" | "medium" | "high" | "xhigh" {
   const config = getConfig()
   return config.modelReasoningEfforts?.[model] ?? "high"
+}
+
+export function resolveModelAlias(model: string): string {
+  let configuredModelAliases: Record<string, string> = {}
+  try {
+    configuredModelAliases = getConfig().modelAliases ?? {}
+  } catch (error) {
+    consola.warn("Failed to read model aliases from config", error)
+  }
+  const modelAliases = {
+    ...defaultConfig.modelAliases,
+    ...configuredModelAliases,
+  }
+  return modelAliases[model] ?? model
 }
 
 export function normalizeProviderBaseUrl(url: string): string {
@@ -335,8 +376,12 @@ export function getAnthropicApiKey(): string | undefined {
 }
 
 export function isResponsesApiWebSearchEnabled(): boolean {
-  const config = getConfig()
-  return config.useResponsesApiWebSearch ?? true
+  try {
+    return getConfig().useResponsesApiWebSearch ?? true
+  } catch (error) {
+    consola.warn("Failed to read Responses API web search config", error)
+    return true
+  }
 }
 
 export function getClaudeTokenMultiplier(): number {

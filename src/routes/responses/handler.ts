@@ -3,7 +3,11 @@ import type { Context } from "hono"
 import { streamSSE } from "hono/streaming"
 
 import { awaitApproval } from "~/lib/approval"
-import { getConfig, isResponsesApiWebSearchEnabled } from "~/lib/config"
+import {
+  getConfig,
+  isResponsesApiWebSearchEnabled,
+  resolveModelAlias,
+} from "~/lib/config"
 import { createHandlerLogger, debugJson, debugJsonTail } from "~/lib/logger"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { state } from "~/lib/state"
@@ -29,6 +33,14 @@ export const handleResponses = async (c: Context) => {
   await checkRateLimit(state)
 
   const payload = await c.req.json<ResponsesPayload>()
+  const requestedModel = payload.model
+  payload.model = resolveModelAlias(payload.model)
+  if (payload.model !== requestedModel) {
+    logger.debug("Resolved model alias:", {
+      requestedModel,
+      resolvedModel: payload.model,
+    })
+  }
   debugJson(logger, "Responses request payload:", payload)
 
   // not support subagent marker for now , set sessionId = getUUID(requestId)
@@ -125,9 +137,14 @@ const isStreamingRequested = (payload: ResponsesPayload): boolean =>
   Boolean(payload.stream)
 
 const useFunctionApplyPatch = (payload: ResponsesPayload): void => {
-  const config = getConfig()
-  const useFunctionApplyPatch = config.useFunctionApplyPatch ?? true
-  if (useFunctionApplyPatch) {
+  let shouldUseFunctionApplyPatch = true
+  try {
+    shouldUseFunctionApplyPatch = getConfig().useFunctionApplyPatch ?? true
+  } catch (error) {
+    logger.warn("Failed to read useFunctionApplyPatch config", error)
+  }
+
+  if (shouldUseFunctionApplyPatch) {
     logger.debug("Using function tool apply_patch for responses")
     if (Array.isArray(payload.tools)) {
       const toolsArr = payload.tools
