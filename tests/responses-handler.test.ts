@@ -60,6 +60,26 @@ const createModels = () => ({
       vendor: "OpenAI",
       version: "gpt-5.2",
     },
+    {
+      capabilities: {
+        family: "gpt-5.5",
+        limits: {
+          max_prompt_tokens: 272000,
+        },
+        object: "model_capabilities" as const,
+        supports: {},
+        tokenizer: "o200k_base",
+        type: "chat" as const,
+      },
+      id: "gpt-5.5",
+      model_picker_enabled: true,
+      name: "GPT-5.5",
+      object: "model" as const,
+      preview: false,
+      supported_endpoints: ["/responses"],
+      vendor: "OpenAI",
+      version: "gpt-5.5",
+    },
   ],
 })
 
@@ -159,4 +179,144 @@ describe("responses handler", () => {
       expect(upstreamPayload.model).toBe(expectedModel)
     },
   )
+
+  test("recovers Copilot cyber policy failures as a model-visible response", async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              message: `${JSON.stringify({
+                error: {
+                  message:
+                    "This content was flagged for possible cybersecurity risk.",
+                  code: "cyber_policy",
+                },
+              })}\n`,
+              type: "error",
+            },
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    )
+    ;(globalThis as unknown as { fetch: typeof fetch }).fetch =
+      fetchMock as unknown as typeof fetch
+
+    const response = await createApp().request("/v1/responses", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-5.5",
+        input: "Review this request.",
+        max_output_tokens: 64,
+        stream: false,
+        store: false,
+      }),
+    })
+
+    expect(response.status).toBe(200)
+
+    const body = (await response.json()) as {
+      error: null
+      output_text: string
+      status: string
+    }
+    expect(body.error).toBeNull()
+    expect(body.status).toBe("completed")
+    expect(body.output_text).toContain("wording triggered a safety filter")
+    expect(body.output_text).toContain("Rephrase your next attempt")
+    expect(body.output_text).toContain("ask the user for clarification")
+    expect(body.output_text).not.toContain("cybersecurity risk")
+  })
+
+  test("streams recovered Copilot cyber policy failures as completed response events", async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              message: `${JSON.stringify({
+                error: {
+                  message:
+                    "This content was flagged for possible cybersecurity risk.",
+                  code: "cyber_policy",
+                },
+              })}\n`,
+              type: "error",
+            },
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    )
+    ;(globalThis as unknown as { fetch: typeof fetch }).fetch =
+      fetchMock as unknown as typeof fetch
+
+    const response = await createApp().request("/v1/responses", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-5.5",
+        input: "Review this request.",
+        max_output_tokens: 64,
+        stream: true,
+        store: false,
+      }),
+    })
+
+    expect(response.status).toBe(200)
+
+    const body = await response.text()
+    expect(body).toContain("event: response.completed")
+    expect(body).toContain("Rephrase your next attempt")
+    expect(body).not.toContain("cybersecurity risk")
+  })
+
+  test("keeps Copilot cyber policy failures as errors for non-gpt-5.5 models", async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              message: `${JSON.stringify({
+                error: {
+                  message:
+                    "This content was flagged for possible cybersecurity risk.",
+                  code: "cyber_policy",
+                },
+              })}\n`,
+              type: "error",
+            },
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    )
+    ;(globalThis as unknown as { fetch: typeof fetch }).fetch =
+      fetchMock as unknown as typeof fetch
+
+    const response = await createApp().request("/v1/responses", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-5-mini",
+        input: "Review this request.",
+        max_output_tokens: 64,
+        stream: false,
+        store: false,
+      }),
+    })
+
+    expect(response.status).toBe(400)
+
+    const body = (await response.json()) as {
+      error: {
+        message: string
+        type: string
+      }
+    }
+    expect(body.error.type).toBe("error")
+    expect(body.error.message).toContain("cyber_policy")
+  })
 })

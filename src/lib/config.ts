@@ -21,6 +21,7 @@ export interface AppConfig {
   anthropicApiKey?: string
   openaiApiKey?: string
   useResponsesApiWebSearch?: boolean
+  recoverCyberPolicyErrors?: boolean
   claudeTokenMultiplier?: number
 }
 
@@ -108,6 +109,7 @@ const defaultConfig: AppConfig = {
   useFunctionApplyPatch: true,
   useMessagesApi: true,
   useResponsesApiWebSearch: true,
+  recoverCyberPolicyErrors: true,
 }
 
 let cachedConfig: AppConfig | null = null
@@ -290,6 +292,15 @@ export function resolveModelAlias(model: string): string {
     ...configuredModelAliases,
   }
   return modelAliases[model] ?? model
+}
+
+export function isCyberPolicyErrorRecoveryEnabled(): boolean {
+  try {
+    return getConfig().recoverCyberPolicyErrors ?? true
+  } catch (error) {
+    consola.warn("Failed to read cyber policy error recovery config", error)
+    return true
+  }
 }
 
 export function normalizeProviderBaseUrl(url: string): string {

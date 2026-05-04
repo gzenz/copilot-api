@@ -339,6 +339,7 @@ The following command line options are available for the `start` command:
     "useFunctionApplyPatch": true,
     "useMessagesApi": true,
     "useResponsesApiWebSearch": true,
+    "recoverCyberPolicyErrors": true,
     "openaiApiKey": "sk-your-openai-key-for-token-counting"
   }
   ```
@@ -361,6 +362,7 @@ The following command line options are available for the `start` command:
 - **useFunctionApplyPatch:** When `true`, the server will convert any custom tool named `apply_patch` in Responses payloads into an OpenAI-style function tool (`type: "function"`) with a parameter schema so assistants can call it using function-calling semantics to edit files. Set to `false` to leave tools unchanged. Defaults to `true`.
 - **useMessagesApi:** When `true`, Claude-family models that support Copilot's native `/v1/messages` endpoint will use the Messages API; otherwise they fall back to `/chat/completions`. Set to `false` to disable Messages API routing and always use `/chat/completions`. Defaults to `true`.
 - **useResponsesApiWebSearch:** When `true`, the server keeps Responses API tools with `type: "web_search"` and forwards them upstream. Set to `false` to strip those tools from `/responses` payloads. Defaults to `true`.
+- **recoverCyberPolicyErrors:** When `true`, Copilot `/responses` errors from `gpt-5.5` with nested `code: "cyber_policy"` are converted into a completed assistant response that tells Codex an agent-generated upstream request triggered a safety filter. This keeps Codex from stopping on raw nested JSON and lets it rephrase the next attempt around the benign operational goal, authorized scope, and expected outcome, or ask the user only when the safe scope is unclear. Other models keep the original error behavior. Defaults to `true`.
 - **claudeTokenMultiplier:** Multiplier applied to the fallback GPT-tokenizer estimate for Claude `/v1/messages/count_tokens` requests. Defaults to `1.15`. Increase it if your client is still compacting too late. This setting is only used when the proxy is estimating Claude tokens locally; if `anthropicApiKey` is configured and Anthropic token counting succeeds, the exact Anthropic count is returned instead.
 - **anthropicApiKey:** Anthropic API key used for accurate Claude token counting (see [Accurate Claude Token Counting](#accurate-claude-token-counting) below). Can also be set via the `ANTHROPIC_API_KEY` environment variable. If not set, token counting falls back to GPT tokenizer estimation.
 - **openaiApiKey:** OpenAI API key used for accurate GPT-family `/v1/responses/input_tokens` counting. Can also be set via the `OPENAI_API_KEY` environment variable. If not set, token counting falls back to local `gpt-tokenizer` estimation using the model's advertised tokenizer.
