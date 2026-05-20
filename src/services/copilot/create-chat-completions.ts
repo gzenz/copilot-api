@@ -93,6 +93,7 @@ export interface ChatCompletionChunk {
     total_tokens: number
     prompt_tokens_details?: {
       cached_tokens: number
+      cache_creation_input_tokens?: number
     }
     completion_tokens_details?: {
       accepted_prediction_tokens: number
@@ -114,6 +115,7 @@ export interface Delta {
     }
   }>
   reasoning_text?: string | null
+  reasoning_content?: string | null
   reasoning_opaque?: string | null
 }
 
@@ -139,6 +141,7 @@ export interface ChatCompletionResponse {
     total_tokens: number
     prompt_tokens_details?: {
       cached_tokens: number
+      cache_creation_input_tokens?: number
     }
   }
 }

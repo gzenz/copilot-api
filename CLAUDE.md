@@ -76,3 +76,60 @@ This is a reverse-engineered proxy that exposes the GitHub Copilot API as both a
 
 - **Claude Code plugin:** Install from marketplace with `/plugin marketplace add https://github.com/caozhiyuan/copilot-api.git` then `/plugin install claude-plugin@copilot-api-marketplace`. Injects `__SUBAGENT_MARKER__` on subagent starts.
 - **Opencode plugin:** Copy `.opencode/plugins/subagent-marker.js` to `~/.config/opencode/plugins/`.
+
+## Fork maintenance
+
+This is a fork of `caozhiyuan/copilot-api` with custom patches on branch `openai-input-token-count-v1.7.1`. Upstream publishes frequently (often multiple versions per day), but most commits are version bumps, dependency churn, or desktop/Electron work that doesn't apply here.
+
+### Remotes
+
+- `origin` -- `github.com/gzenz/copilot-api` (the fork)
+- `upstream` -- `github.com/caozhiyuan/copilot-api` (the original)
+
+### Installation
+
+The CLI is installed as a plain symlink (not npm-managed, so `npm update -g` won't touch it):
+
+```
+/opt/homebrew/bin/copilot-api -> /Users/gzenz/PycharmProjects/copilot-api/dist/main.js
+```
+
+After source changes: `bun run build` then restart the server.
+
+To restore the symlink if lost: `ln -sf /Users/gzenz/PycharmProjects/copilot-api/dist/main.js /opt/homebrew/bin/copilot-api`
+
+### How to pull upstream changes
+
+```sh
+git fetch upstream
+git log upstream/dev --oneline --since="<last-check-date>" | head -40
+```
+
+Review commits. Skip: version bumps, lockfile/CI churn, desktop/Electron, Chinese-model-specific features. Focus on: streaming fixes, token counting, model routing, usage reporting.
+
+### How to integrate a specific commit
+
+Prefer manual application over cherry-pick when the upstream has diverged significantly (different file structure, refactored helpers, new types). Steps:
+
+1. `git show <hash> --stat` -- check scope
+2. `git show <hash>` -- read the full diff
+3. If the diff is small and applies cleanly: `git cherry-pick <hash>`
+4. If cherry-pick conflicts: abort (`git cherry-pick --abort`), then manually apply:
+   - Read both our file and the upstream version (`git show <hash>:<path>`)
+   - Identify the actual change vs surrounding refactors
+   - Apply the change to our codebase, adapting to our types/structure
+   - Add any missing type definitions (check `bun run typecheck`)
+5. `bun test` to verify
+6. `bun run build` to rebuild dist
+
+### What we've integrated (beyond upstream base)
+
+Custom patches on our branch:
+- Anthropic token counting via real API (PR #134, merged upstream)
+- GPT-5.5 safety filter response recovery
+- Codex auto-review model aliases and larger context model
+- Responses API input token counting
+- [1m] suffix for 1M context window models (cherry-picked from upstream b2a5422)
+- Deferred content handling during tool calls in streaming (from upstream 51675f7, manually applied)
+- `cache_creation_input_tokens` subtraction in usage reporting
+- `reasoning_content` type support on Delta
